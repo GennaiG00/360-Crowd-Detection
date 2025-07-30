@@ -28,7 +28,6 @@ python main.py --view heatmap --boundingBox circle --device mps --typeofstreamin
 ### Options
 
 - `--view`: Visualization mode (`cluster` or `heatmap`)
-- `--boundingBox`: Type of bounding box drawn around detections (`circle` or `rectangle`)
 - `--device`: Hardware device to run the model (`cpu`, `cuda`, `mps`)
 - `--typeofstreaming`: Input source (`video` for local file or `live` for RTMP stream)
 
