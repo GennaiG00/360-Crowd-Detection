@@ -2,12 +2,10 @@ import cv2
 import numpy as np
 from ultralytics import YOLO
 import floor_detection
-from sklearn.cluster import HDBSCAN
 import argparse
 import sys
-import time
 
-VIDEO_PATH = ("/Users/gianmariagennai/Documents/Unifi/Magistrale/Image and video analysis/Laboratorio/LWCC/Light/video/screenrecording.mov")
+VIDEO_PATH = "/Users/gianmariagennai/Documents/Unifi/Magistrale/Image and video analysis/Laboratorio/LWCC/Light/video/Untitled.mp4"
 VIDEO_URL = "rtmp://192.168.4.251/live/live"
 
 def normalize_floor(floor, margin=20):
@@ -24,189 +22,162 @@ def map_person_to_floor(cx, cy, min_xy, scale):
     mapped_y = int((cy - min_xy[1]) * scale)
     return mapped_x, mapped_y
 
-def clustering(data):
-    hdbscan = HDBSCAN(min_cluster_size=50)
-    hdbscan.fit(data)
-    labels = hdbscan.labels_
-    return labels
-
-def draw_clusters_on_map(image, all_points, clusters_label):
-    output = image.copy()
-    for lbl in set(clusters_label) - {-1}:
-        cluster_pts = np.array([pt for i, pt in enumerate(all_points) if clusters_label[i] == lbl])
-        centroid = np.mean(cluster_pts, axis=0).astype(int)
-        radius = int(np.max(np.linalg.norm(cluster_pts - centroid, axis=1))) + 10
-        overlay = output.copy()
-        cv2.circle(overlay, tuple(centroid), radius, (0, 0, 255), -1)
-        output = cv2.addWeighted(overlay, 0.25, output, 0.75, 0)
-    return output
+def on_trackbar(val, cap, window_name):
+    cap.set(cv2.CAP_PROP_POS_FRAMES, val)
+    ret, frame = cap.read()
+    if ret:
+        cv2.imshow(window_name, frame)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--view', choices=['clusters', 'heatmap'], default='clusters')
+    parser.add_argument('--view', choices=['clusters', 'heatmap'], default='heatmap')
     parser.add_argument('--device', choices=['cpu', 'cuda', 'mps'], default='mps')
     parser.add_argument('--typeofstreaming', choices=('video', 'live'), default='video')
+    parser.add_argument('--online', choices=('true', 'false'), default='false')
+    if parser.parse_args().online == 'false':
+        parser.add_argument('--fileName', type=str, default='xxx')
+
     args = parser.parse_args()
-
     view_mode = args.view
-    all_points = []
 
-    model = YOLO("yolov8m-seg.pt").to(args.device)
+    if args.online == 'true':
+        model = YOLO("yolov8m-seg.pt").to(args.device)
+        model.overrides['verbose'] = False
 
-    if args.typeofstreaming == 'live':
-        cap = cv2.VideoCapture(VIDEO_URL)
-        if (cap.isOpened() == False):
-            print('!!! Unable to open URL')
-            sys.exit(-1)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        wait_ms = int(1000 / fps)
-        print('FPS:', fps)
-    else:
-        cap = cv2.VideoCapture(VIDEO_PATH)
+        if args.typeofstreaming == 'live':
+            cap = cv2.VideoCapture(VIDEO_URL)
+            if not cap.isOpened():
+                print('!!! Unable to open URL')
+                sys.exit(-1)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+        else:
+            cap = cv2.VideoCapture(VIDEO_PATH)
+            fps = cap.get(cv2.CAP_PROP_FPS)
 
-    ret, first_frame = cap.read()
-    if not ret:
-        raise RuntimeError("Error reading the first frame")
-
-    height, width = first_frame.shape[:2]
-    floor = floor_detection.delimita_pavimento(first_frame, output_file="floor.npy")
-    floor_np = np.array(floor)
-
-    norm_floor, min_xy, scale, canvas_size = normalize_floor(floor_np)
-    floor_map_static = np.ones((canvas_size[1], canvas_size[0], 3), dtype=np.uint8) * 255
-    cv2.polylines(floor_map_static, [norm_floor], isClosed=True, color=(0, 0, 0), thickness=2)
-
-    SLOT_DURATION = 225  # durata dello slot in secondi (3 min 45 sec)
-    last_trigger = -1
-    start_time = time.time()
-
-    s_heatmap_floor = []
-    s_heatmap_frame = []
-    heatmap_floor = np.zeros((canvas_size[1], canvas_size[0]), dtype=np.float32)
-    heatmap_frame = np.zeros((height, width), dtype=np.float32)
-
-    frame_index = 0
-    skip = 15
-
-    floor_positions = []
-
-    while cap.isOpened():
-        ret, frame = cap.read()
+        ret, first_frame = cap.read()
         if not ret:
-            break
-        frame_index += 1
-        if frame_index % skip != 0:
-            continue
+            raise RuntimeError("Error reading the first frame")
 
-        results = model(frame)[0]
+        height, width = first_frame.shape[:2]
 
-        if results.boxes:
-            for box in results.boxes:
-                if box.conf < 0.35:
-                    continue
-                cls = int(box.cls)
-                if model.names[cls] != "person":
-                    continue
+        floor = floor_detection.delimita_pavimento(first_frame, output_file="floor.npy")
+        floor_np = np.array(floor)
+        norm_floor, min_xy, scale, canvas_size = normalize_floor(floor_np)
+        floor_map_static = np.ones((canvas_size[1], canvas_size[0], 3), dtype=np.uint8) * 255
+        static_floor = cv2.polylines(floor_map_static, [norm_floor], isClosed=True, color=(0, 0, 0), thickness=2).copy()
 
-                x1, y1, x2, y2 = map(int, box.xyxy.cpu().numpy()[0])
-                cx = int((x1 + x2) / 2)
-                cy = int(y2)
-                center_y = int((y1 + y2) / 2)
+        heatmap_floor = np.zeros((canvas_size[1], canvas_size[0]), dtype=np.float32)
+        heatmap_frame = np.zeros((height, width), dtype=np.float32)
 
-                cv2.circle(frame, (cx, center_y), 10, (0, 255, 0), -1)
-                cv2.circle(frame, (cx, cy), 5, (255, 0, 0), 2)
+        out_frame = cv2.VideoWriter(
+            "heatmap_frame.mp4",
+            cv2.VideoWriter_fourcc(*'mp4v'),
+            fps,
+            (width, height)
+        )
 
-                mapped_pos = map_person_to_floor(cx, cy, min_xy, scale)
-                floor_positions.append(mapped_pos)
-                all_points.append(mapped_pos)
+        out_floor = cv2.VideoWriter(
+            "heatmap_floor.mp4",
+            cv2.VideoWriter_fourcc(*'mp4v'),
+            fps,
+            (canvas_size[0], canvas_size[1])
+        )
 
-                elapsed = time.time() - start_time
-                current_slot = int(elapsed // SLOT_DURATION)
 
-                if current_slot > last_trigger:
-                    s_heatmap_floor.append(heatmap_floor.copy())
-                    s_heatmap_frame.append(heatmap_frame.copy())
 
-                    heatmap_floor = np.zeros_like(heatmap_floor, dtype=np.float32)
-                    heatmap_frame = np.zeros_like(heatmap_frame, dtype=np.float32)
+        skip = 5
+        frame_index = 0
+        numbers_of_people = []
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            frame_index += 1
+            if frame_index % skip != 0:
+                continue
 
-                    last_trigger = current_slot
+            results = model(frame, verbose=False)[0]
+            count = 0
 
-                # Aggiorna la heatmap attuale
-                x_canvas, y_canvas = mapped_pos
-                x1_, x2_ = max(x_canvas - 10, 0), min(x_canvas + 10, canvas_size[0])
-                y1_, y2_ = max(y_canvas - 10, 0), min(y_canvas + 10, canvas_size[1])
-                heatmap_floor[y1_:y2_, x1_:x2_] += 1
-                np.clip(heatmap_floor, 0, 150, out=heatmap_floor)
+            if results.boxes:
+                for box in results.boxes:
+                    if box.conf < 0.40:
+                        continue
+                    cls = int(box.cls)
+                    if model.names[cls] != "person":
+                        continue
+                    count += 1
 
-                x1f, x2f = max(cx - 10, 0), min(cx + 10, width)
-                y1f, y2f = max(cy - 10, 0), min(cy + 10, height)
-                heatmap_frame[y1f:y2f, x1f:x2f] += 1
-                np.clip(heatmap_frame, 0, 150, out=heatmap_frame)
+                    x1, y1, x2, y2 = map(int, box.xyxy.cpu().numpy()[0])
+                    cx = int((x1 + x2) / 2)
+                    cy = int(y2)
 
-        cv2.circle(floor_map_static, (floor_positions[-1][0], floor_positions[-1][1]), 4, (0, 0, 255), -1)
+                    mapped_pos = map_person_to_floor(cx, cy, min_xy, scale)
 
-        if args.view == 'clusters':
-            cv2.imshow("Person Position", floor_map_static)
-            cv2.imshow("Person Detection", frame)
+                    # Update heatmaps
+                    heatmap_frame[max(cy-10,0):min(cy+10,height), max(cx-10,0):min(cx+10,width)] += 1
+                    heatmap_floor[max(mapped_pos[1]-10,0):min(mapped_pos[1]+10,canvas_size[1]),
+                                  max(mapped_pos[0]-10,0):min(mapped_pos[0]+10,canvas_size[0])] += 1
 
-        if view_mode == 'heatmap':
-            if len(s_heatmap_floor) == 1:
-                heatmap_to_display = 0.5 * s_heatmap_floor[-1] + heatmap_floor
-            elif len(s_heatmap_floor) > 1:
-                heatmap_to_display = 0.5 * s_heatmap_floor[-1] + 0.25 * s_heatmap_floor[-2] + heatmap_floor
-            else:
-                heatmap_to_display = heatmap_floor
+            numbers_of_people.append(count)
 
-            blurred_floor = cv2.GaussianBlur(heatmap_to_display, (75, 75), 0)
-            heatmap_floor_img = cv2.applyColorMap(cv2.normalize(blurred_floor, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),cv2.COLORMAP_JET)
-            overlay_floor = cv2.addWeighted(floor_map_static, 0.6, heatmap_floor_img, 0.5, 0)
-            cv2.imshow("Realtime Heatmap - Floor", overlay_floor)
-
-            if len(s_heatmap_frame) == 1:
-                heatmap_to_display = 0.5 * s_heatmap_frame[-1] + heatmap_frame
-            elif len(s_heatmap_frame) > 1:
-                heatmap_to_display = heatmap_frame
-
-            blurred_frame = cv2.GaussianBlur(heatmap_to_display, (75, 75), 0)
-            heatmap_frame_img = cv2.applyColorMap(cv2.normalize(blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),cv2.COLORMAP_JET)
+            blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0)
+            heatmap_frame_img = cv2.applyColorMap(
+                cv2.normalize(blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
+                cv2.COLORMAP_JET
+            )
             overlay_frame = cv2.addWeighted(frame, 0.6, heatmap_frame_img, 0.5, 0)
             cv2.imshow("Realtime Heatmap - Frame", overlay_frame)
+            out_frame.write(overlay_frame)
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            # Overlay floor heatmap
+            blurred_floor = cv2.GaussianBlur(heatmap_floor, (75, 75), 0)
+            heatmap_floor_img = cv2.applyColorMap(
+                cv2.normalize(blurred_floor, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
+                cv2.COLORMAP_JET
+            )
+            overlay_floor = cv2.addWeighted(static_floor, 0.6, heatmap_floor_img, 0.5, 0)
+            cv2.imshow("Realtime Heatmap - Floor", overlay_floor)
+            out_floor.write(overlay_floor)
 
-    cap.release()
-    all_points_np = np.array(all_points)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-    if view_mode == 'heatmap':
-        heatmap_final_floor = np.zeros_like(heatmap_floor)
-        for tmp in s_heatmap_floor:
-            heatmap_final_floor += tmp
+        print("Max people in the room:", max(numbers_of_people))
+        print("Average people in the room:", sum(numbers_of_people)/len(numbers_of_people))
 
-        heatmap_blurred_floor = cv2.GaussianBlur(heatmap_final_floor, (75, 75), 0)
-        heatmap_color_floor = cv2.applyColorMap(
-            cv2.normalize(heatmap_blurred_floor, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
-            cv2.COLORMAP_JET)
-        final_overlay_floor = cv2.addWeighted(floor_map_static, 0.7, heatmap_color_floor, 0.5, 0)
-        cv2.imshow("Final Heatmap - Floor", final_overlay_floor)
+        cap.release()
+        out_frame.release()
+        out_floor.release()
+        cv2.destroyAllWindows()
 
-        heatmap_final_frame = np.zeros_like(heatmap_floor)
-        for tmpp in s_heatmap_frame:
-            heatmap_final_frame += tmpp
+        open("people_count.txt", "w").write(str(max(numbers_of_people)) + "\n" + str(sum(numbers_of_people)/len(numbers_of_people)))
+    else:
+        cap_frame = cv2.VideoCapture("heatmap_frame.mp4")
+        cap_floor = cv2.VideoCapture("heatmap_floor.mp4")
+        read = open("people_count.txt", "r").readlines(0)
 
-        heatmap_blurred_frame = cv2.GaussianBlur(heatmap_final_frame, (75, 75), 0)
-        heatmap_color_frame = cv2.applyColorMap(
-            cv2.normalize(heatmap_blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
-            cv2.COLORMAP_JET)
-        final_overlay_frame = cv2.addWeighted(floor_map_static, 0.7, heatmap_color_frame, 0.5, 0)
-        cv2.imshow("Final Heatmap - Floor", final_overlay_frame)
+        total_frames = int(cap_frame.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    elif view_mode == 'clusters':
-        print("Saving clustered map...")
-        clusters_label = clustering(all_points_np)
-        map_with_clusters = draw_clusters_on_map(floor_map_static, all_points_np, clusters_label)
-        cv2.imshow("Clustered Floor Map", map_with_clusters)
+        cv2.namedWindow("Offline Heatmap Frame")
+        cv2.createTrackbar("Frame", "Offline Heatmap Frame", 0, total_frames-1,
+                           lambda v: on_trackbar(v, cap_frame, "Offline Heatmap Frame"))
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        cv2.namedWindow("Offline Heatmap Floor")
+        cv2.createTrackbar("Frame", "Offline Heatmap Floor", 0, total_frames-1,
+                           lambda v: on_trackbar(v, cap_floor, "Offline Heatmap Floor"))
+
+        on_trackbar(0, cap_frame, "Offline Heatmap Frame")
+        on_trackbar(0, cap_floor, "Offline Heatmap Floor")
+
+        print("Max people in the room:", read[0])
+        print("Average people in the room:", read[1])
+
+        while True:
+            key = cv2.waitKey(30) & 0xFF
+            if key == 27:
+                break
+
+        cap_frame.release()
+        cap_floor.release()
+        cv2.destroyAllWindows()

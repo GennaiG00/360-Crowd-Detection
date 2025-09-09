@@ -1,37 +1,91 @@
+# People Detection and Floor Mapping with YOLOv8
 
-# People Detection and Mapping on Floor Plan
+This project uses a **YOLOv8 segmentation model** to detect people in real-time streams or recorded videos.  
+Detected positions are mapped onto a predefined **floor plan** and visualized through **heatmaps** or **cluster maps**.  
 
-This script performs real-time or video-based detection of people using a YOLOv8 segmentation model. It maps detected people to a predefined floor area and provides visualizations either as heatmaps or cluster maps.
+It supports both **online (live detection)** and **offline (replay saved results)** modes.  
 
-## Steps
+---
 
-- Real-time or video input source
-- YOLOv8-based person detection
-- Mapping of detections onto a floor plan
-- Heatmap or DBSCAN-based cluster visualizations
-- Save results as images
+## Features
+
+- Real-time or video-based **people detection** with YOLOv8  
+- Mapping of detections to a **floor plan**  
+- Visualizations:  
+  - **Heatmap** of crowd density (per frame and floor plan)  
+  - **Clustering** (DBSCAN-based)  
+- Support for **video file input** or **RTMP live streaming**  
+- Save results to:  
+  - Video files (`heatmap_frame.mp4`, `heatmap_floor.mp4`)  
+  - People count summary (`people_count.txt`)  
+  - Offline interactive visualization with trackbars  
+
+---
 
 ## Requirements
 
-- Python 3.x
-- OpenCV
-- NumPy
-- Ultralytics YOLO
-- scikit-learn 
+Make sure the following dependencies are installed:  
 
-## Example
+- Python 3.x  
+- [OpenCV](https://pypi.org/project/opencv-python/)  
+- [NumPy](https://pypi.org/project/numpy/)  
+- [Ultralytics YOLO](https://docs.ultralytics.com/)  
+- [scikit-learn](https://scikit-learn.org/stable/)  
 
+Install everything with:  
+
+```bash
+pip install opencv-python numpy ultralytics scikit-learn
 ```
-python main.py --view heatmap --boundingBox circle --device mps --typeofstreaming video
+
+---
+
+## Usage
+
+### Online Mode (Detection + Visualization)
+
+Process a **video file**:  
+
+```bash
+python main.py --view heatmap --device mps --typeofstreaming video --online true
+```
+mps is for MacOS devices with Apple Silicon. Use `cuda` for NVIDIA GPUs or `cpu` if no GPU is available.
+
+Or use a **live RTMP stream**:  
+
+```bash
+python main.py --view heatmap --device cuda --typeofstreaming live --online true
 ```
 
-### Options
+### Offline Mode (Replay Saved Results)
 
-- `--view`: Visualization mode (`cluster` or `heatmap`)
-- `--device`: Hardware device to run the model (`cpu`, `cuda`, `mps`)
-- `--typeofstreaming`: Input source (`video` for local file or `live` for RTMP stream)
+Replay the previously saved visualizations:  
+
+```bash
+python main.py --online false
+```
+
+---
+
+## Command-Line Options
+
+| Argument             | Choices                    | Default   | Description                        |
+|-----------------------|----------------------------|-----------|------------------------------------|
+| `--view`             | `heatmap`, `clusters`     | `heatmap` | Visualization type                 |
+| `--device`           | `cpu`, `cuda`, `mps`      | `mps`     | Device for run YOLO model          |
+| `--typeofstreaming`  | `video`, `live`           | `video`   | Input source                       |
+| `--online`           | `true`, `false`           | `false`   | Online mode or offline    |
+| `--fileName`         | `<str>`                   | `xxx`     | Output filename prefix (used only if `--online false`) |
+
+---
 
 ## Output
 
-- Heatmap visualization (floor and frame heatmaps)
-- Clustering visualization
+When running in **online mode**:  
+- `heatmap_frame.mp4` → heatmap overlaid on original video frames  
+- `heatmap_floor.mp4` → heatmap projected onto the floor plan  
+- `people_count.txt` → maximum and average number of people detected  
+
+When running in **offline mode**:  
+- Interactive visualization with **trackbars** to scroll through saved heatmaps  
+---
