@@ -69,13 +69,14 @@ python main.py --online false
 
 ## Command-Line Options
 
-| Argument             | Choices                    | Default   | Description                        |
-|-----------------------|----------------------------|-----------|------------------------------------|
-| `--view`             | `heatmap`, `clusters`     | `heatmap` | Visualization type                 |
-| `--device`           | `cpu`, `cuda`, `mps`      | `mps`     | Device for run YOLO model          |
-| `--typeofstreaming`  | `video`, `live`           | `video`   | Input source                       |
-| `--online`           | `true`, `false`           | `false`   | Online mode or offline    |
-| `--fileName`         | `<str>`                   | `xxx`     | Output filename prefix (used only if `--online false`) |
+| Argument            | Choices               | Default   | Description                                            |
+|---------------------|-----------------------|-----------|--------------------------------------------------------|
+| `--view`            | `heatmap`, `clusters` | `heatmap` | Visualization type                                     |
+| `--device`          | `cpu`, `cuda`, `mps`  | `mps`     | Device for run YOLO model                              |
+| `--typeofstreaming` | `video`, `live`       | `video`   | Input source                                           |
+| `--online`          | `true`, `false`       | `false`   | Online mode or offline                                 |
+| `--fileName`        | `<str>`               | `xxx`     | Output filename prefix (used only if `--online false`) |
+| `--skipframe`       | `<int>`               | `15`      | Number of frame to skip             |
 
 ---
 
@@ -85,7 +86,14 @@ When running in **online mode**:
 - `heatmap_frame.mp4` → heatmap overlaid on original video frames  
 - `heatmap_floor.mp4` → heatmap projected onto the floor plan  
 - `people_count.txt` → maximum and average number of people detected  
-
+- `floor.npy` → detected floor boundary
+- `clusters_points.npy/.csv` → people positions per frame
+ 
 When running in **offline mode**:  
 - Interactive visualization with **trackbars** to scroll through saved heatmaps  
 ---
+
+## Tips
+- Adjust `--skipframe` to balance performance and detection frequency. Expecially it's useful in clustering view because it's more importat see 
+    the point where people are in a static position than moving around.
+- Ensure that when you use offline mode (`--online false`), the specified `--fileName` matches the prefix of the saved files you want to replay.
