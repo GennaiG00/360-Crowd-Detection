@@ -11,6 +11,15 @@ import os
 VIDEO_PATH = "./video/"
 VIDEO_URL = "rtmp://192.168.4.251/live/live"
 
+#DECAY_DELAY it's for how many frames the heatmap will keep the value before start to decay
+#DECAY_STEP it's the factor that will be applied to the heatmap value after DECAY
+#MIN_VALUE it's the minimum value that the heatmap can reach, to avoid negative
+
+DECAY_DELAY = 5100
+DECAY_STEP = 0.95
+MIN_VALUE = 0.0
+
+
 def normalize_floor(floor, margin=20):
     min_xy = floor.min(axis=0)
     max_xy = floor.max(axis=0)
@@ -36,7 +45,7 @@ if __name__ == '__main__':
     parser.add_argument('--view', choices=['clusters', 'heatmap'], default='heatmap')
     parser.add_argument('--device', choices=['cpu', 'cuda', 'mps'], default='mps')
     parser.add_argument('--typeofstreaming', choices=('video', 'live'), default='video')
-    parser.add_argument('--online', choices=('true', 'false'), default='false')
+    parser.add_argument('--online', choices=('true', 'false'), default='true')
     parser.add_argument('--skipframe', default=15, type=int)
 
     args = parser.parse_args()
@@ -45,16 +54,16 @@ if __name__ == '__main__':
 
     # ---------- ONLINE PROCESS ----------
     if args.online == 'true':
-        # chiediamo il nome del progetto
         project_name = input("Enter the project name: ")
 
-        # cartella dedicata
         project_dir = os.path.join("data", project_name)
         os.makedirs(project_dir, exist_ok=True)
 
+        # Load YOLOv8 model
         model = YOLO("yolov8m-seg.pt").to(args.device)
         model.overrides['verbose'] = False
 
+        # Open video source/stream
         if args.typeofstreaming == 'live':
             cap = cv2.VideoCapture(VIDEO_URL)
             if not cap.isOpened():
@@ -69,7 +78,7 @@ if __name__ == '__main__':
 
         height, width = first_frame.shape[:2]
 
-
+        # Floor detection and normalization
         floor = floor_detection.delimita_pavimento(first_frame, output_file=os.path.join(project_dir, "floor.npy"))
         floor_np = np.array(floor)
         norm_floor, min_xy, scale, canvas_size = normalize_floor(floor_np)
@@ -81,8 +90,9 @@ if __name__ == '__main__':
         else:
             heatmap_floor = np.zeros((canvas_size[1], canvas_size[0]), dtype=np.float32)
             heatmap_frame = np.zeros((height, width), dtype=np.float32)
+            last_seen_frame = np.zeros((height, width), dtype=np.int32)
+            last_seen_floor = np.zeros((canvas_size[1], canvas_size[0]), dtype=np.int32)
 
-        # writer
         if args.view == 'heatmap':
             out_frame = cv2.VideoWriter(
                 os.path.join(project_dir, "heatmap_frame.mp4"),
@@ -137,8 +147,22 @@ if __name__ == '__main__':
                     if args.view == 'heatmap':
                         heatmap_frame[max(cy - 10, 0):min(cy + 10, height),
                                       max(cx - 10, 0):min(cx + 10, width)] += 1
+                        last_seen_frame[max(cy - 10, 0):min(cy + 10, height),
+                                        max(cx - 10, 0):min(cx + 10, width)] = frame_index
+
                         heatmap_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
                                       max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] += 1
+                        last_seen_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
+                                        max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] = frame_index
+
+                        inactive_mask_frame = (frame_index - last_seen_frame) > DECAY_DELAY
+                        inactive_mask_floor = (frame_index - last_seen_floor) > DECAY_DELAY
+
+                        heatmap_frame[inactive_mask_frame] *= DECAY_STEP
+                        heatmap_floor[inactive_mask_floor] *= DECAY_STEP
+
+                        heatmap_frame[heatmap_frame < MIN_VALUE] = MIN_VALUE
+                        heatmap_floor[heatmap_floor < MIN_VALUE] = MIN_VALUE
 
                         blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0)
                         heatmap_frame_img = cv2.applyColorMap(
@@ -155,6 +179,7 @@ if __name__ == '__main__':
                             cv2.COLORMAP_JET
                         )
                         overlay_floor = cv2.addWeighted(static_floor, 0.6, heatmap_floor_img, 0.5, 0)
+                        cv2.imshow("Realtime Heatmap - Floor", overlay_floor)
                         out_floor.write(overlay_floor)
                     else:
                         cv2.circle(static_floor, mapped_pos, 5, (0, 0, 255), -1)
@@ -163,7 +188,8 @@ if __name__ == '__main__':
 
             numbers_of_people.append(count)
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            key = cv2.waitKey(30) & 0xFF
+            if key == 27:
                 break
 
         if args.view == 'clusters' and len(clusters_points) > 0:
@@ -192,7 +218,6 @@ if __name__ == '__main__':
                 f.write(str(max(numbers_of_people)) + "\n" + str(sum(numbers_of_people) / len(numbers_of_people)))
             else:
                 f.write("0\n0")
-
     # ---------- OFFLINE PROCESS ----------
     else:
         project_name = input("Enter the project name: ")
@@ -217,7 +242,7 @@ if __name__ == '__main__':
 
             on_trackbar(0, cap_frame, "Offline Heatmap Frame")
             on_trackbar(0, cap_floor, "Offline Heatmap Floor")
-
+            print(" - press ESC to end the program.")
             print("Max people in the room:", read[0])
             print("Average people in the room:", read[1])
 
@@ -251,8 +276,8 @@ if __name__ == '__main__':
             cv2.createTrackbar("MinClusterSize", WIN_MAIN, 5, 100, lambda v: None)
 
             print("Offline cluster replay controls:")
-            print(" - premi 'c' per eseguire HDBSCAN sui punti fino al frame selezionato.")
-            print(" - premi ESC per uscire.")
+            print(" - press 'c' to execute HDBSCAN over the current points untiled the selected frame.")
+            print(" - press ESC to end the program.")
 
             while True:
                 key = cv2.waitKey(30) & 0xFF
@@ -264,9 +289,7 @@ if __name__ == '__main__':
                     if min_cluster_size < 2:
                         min_cluster_size = 2
                     selected = pts_arr[pts_arr[:, 0] <= frame_val]
-                    if len(selected) == 0:
-                        print("Nessun punto selezionato fino a questo frame.")
-                        continue
+
                     points = selected[:, 1:3].astype(float)
 
                     clustering = HDBSCAN(min_cluster_size=int(min_cluster_size)).fit(points)
