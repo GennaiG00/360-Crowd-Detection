@@ -93,6 +93,7 @@ if __name__ == '__main__':
             last_seen_frame = np.zeros((height, width), dtype=np.int32)
             last_seen_floor = np.zeros((canvas_size[1], canvas_size[0]), dtype=np.int32)
 
+        # Prepare video writers
         if args.view == 'heatmap':
             out_frame = cv2.VideoWriter(
                 os.path.join(project_dir, "heatmap_frame.mp4"),
@@ -118,6 +119,8 @@ if __name__ == '__main__':
         skip = args.skipframe
         frame_index = 0
         numbers_of_people = []
+
+        # Process video frames
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
@@ -131,6 +134,7 @@ if __name__ == '__main__':
 
             if results.boxes:
                 for box in results.boxes:
+                    # Filter for 'person' class with confidence threshold(We can change it if we want more or less confidence)
                     if box.conf < 0.40:
                         continue
                     cls = int(box.cls)
@@ -155,6 +159,7 @@ if __name__ == '__main__':
                         last_seen_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
                                         max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] = frame_index
 
+                        #Decay process
                         inactive_mask_frame = (frame_index - last_seen_frame) > DECAY_DELAY
                         inactive_mask_floor = (frame_index - last_seen_floor) > DECAY_DELAY
 
@@ -164,6 +169,7 @@ if __name__ == '__main__':
                         heatmap_frame[heatmap_frame < MIN_VALUE] = MIN_VALUE
                         heatmap_floor[heatmap_floor < MIN_VALUE] = MIN_VALUE
 
+                        # Visualization
                         blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0)
                         heatmap_frame_img = cv2.applyColorMap(
                             cv2.normalize(blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
@@ -201,6 +207,7 @@ if __name__ == '__main__':
                 writer.writerows(pts_arr.tolist())
             print(f"Saved {len(pts_arr)} cluster points")
 
+        #Statistics(It's possible that some time Max people it's not exact because the model can miss people or detect false positives)
         print("Max people in the room:", max(numbers_of_people) if numbers_of_people else 0)
         print("Average people in the room:",
               (sum(numbers_of_people) / len(numbers_of_people)) if numbers_of_people else 0)
