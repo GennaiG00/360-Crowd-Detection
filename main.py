@@ -5,7 +5,6 @@ import floor_detection
 import argparse
 import sys
 from sklearn.cluster import HDBSCAN
-import csv
 import os
 
 VIDEO_PATH = "./video/"
