@@ -11,11 +11,11 @@ import os
 VIDEO_PATH = "./video/"
 VIDEO_URL = "rtmp://192.168.4.251/live/live"
 
-#DECAY_DELAY it's for how many frames the heatmap will keep the value before start to decay
+#DECAY_DELAY it's for how many frames the heatmap will keep the value before to decay
 #DECAY_STEP it's the factor that will be applied to the heatmap value after DECAY
 #MIN_VALUE it's the minimum value that the heatmap can reach, to avoid negative
 
-DECAY_DELAY = 5100
+DECAY_DELAY = 51000
 DECAY_STEP = 0.95
 MIN_VALUE = 0.0
 
@@ -79,7 +79,7 @@ if __name__ == '__main__':
         height, width = first_frame.shape[:2]
 
         # Floor detection and normalization
-        floor = floor_detection.delimita_pavimento(first_frame, output_file=os.path.join(project_dir, "floor.npy"))
+        floor = floor_detection.floor_perimeter(first_frame, output_file=os.path.join(project_dir, "floor.npy"))
         floor_np = np.array(floor)
         norm_floor, min_xy, scale, canvas_size = normalize_floor(floor_np)
         floor_map_static = np.ones((canvas_size[1], canvas_size[0], 3), dtype=np.uint8) * 255
@@ -120,8 +120,13 @@ if __name__ == '__main__':
         frame_index = 0
         numbers_of_people = []
 
+        print(" - press ESC to end the program.")
+
         # Process video frames
         while cap.isOpened():
+            key = cv2.waitKey(30) & 0xFF
+            if key == 27:
+                break
             ret, frame = cap.read()
             if not ret:
                 break
@@ -194,17 +199,9 @@ if __name__ == '__main__':
 
             numbers_of_people.append(count)
 
-            key = cv2.waitKey(30) & 0xFF
-            if key == 27:
-                break
-
         if args.view == 'clusters' and len(clusters_points) > 0:
             pts_arr = np.array(clusters_points, dtype=int)
             np.save(os.path.join(project_dir, "clusters_points.npy"), pts_arr)
-            with open(os.path.join(project_dir, "clusters_points.csv"), "w", newline='') as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(["frame", "x", "y"])
-                writer.writerows(pts_arr.tolist())
             print(f"Saved {len(pts_arr)} cluster points")
 
         #Statistics(It's possible that some time Max people it's not exact because the model can miss people or detect false positives)

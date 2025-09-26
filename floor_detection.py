@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 
-def delimita_pavimento(img, output_file="pavimento_punti.npy"):
+def floor_perimeter(img, output_file="floor_points.npy"):
     clone = img.copy()
     points = []
 
@@ -37,6 +37,9 @@ def delimita_pavimento(img, output_file="pavimento_punti.npy"):
                 break
             else:
                 print("You must select at least 3 points.")
+        elif key == ord('c'):
+            print("Points cleared, start again.")
+            points.clear()
 
     cv2.destroyAllWindows()
     return points
