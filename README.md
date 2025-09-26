@@ -80,6 +80,12 @@ python main.py --online false
 
 ---
 
+
+
+https://github.com/user-attachments/assets/b0950ab6-eb43-4bc1-8af7-d2c45ea6886e
+
+
+
 ## Output
 
 When running in **online mode**:  
