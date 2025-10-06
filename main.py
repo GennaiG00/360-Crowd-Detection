@@ -8,7 +8,7 @@ from sklearn.cluster import HDBSCAN
 import os
 
 VIDEO_PATH = "./video/"
-VIDEO_URL = "rtmp://192.168.4.251/live/live"
+VIDEO_URL = "rtmp://192.168.4.251/live/live"    #From Insta360Pro
 
 #DECAY_DELAY it's for how many frames the heatmap will keep the value before to decay
 #DECAY_STEP it's the factor that will be applied to the heatmap value after DECAY
@@ -24,8 +24,8 @@ def normalize_floor(floor, margin=20):
     max_xy = floor.max(axis=0)
     floor_range = max_xy - min_xy
     scale = 1
-    canvas_size = (int(floor_range[0]) + 2 * margin, int(floor_range[1]) + 2 * margin)
-    norm_floor = (floor - min_xy + margin).astype(int)
+    canvas_size = (int(floor_range[0]) + 2 * margin, int(floor_range[1]) + 2 * margin) # width, height of the canvas
+    norm_floor = (floor - min_xy + margin).astype(int) # normalized floor points with margin
     return norm_floor, min_xy, scale, canvas_size
 
 def map_person_to_floor(cx, cy, min_xy, scale):
@@ -33,7 +33,7 @@ def map_person_to_floor(cx, cy, min_xy, scale):
     mapped_y = int((cy - min_xy[1]) * scale)
     return mapped_x, mapped_y
 
-def on_trackbar(val, cap, window_name):
+def on_trackbar(val, cap, window_name): # To move over the video frames(val->frame number)
     cap.set(cv2.CAP_PROP_POS_FRAMES, val)
     ret, frame = cap.read()
     if ret:
@@ -41,10 +41,10 @@ def on_trackbar(val, cap, window_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--view', choices=['clusters', 'heatmap'], default='heatmap')
+    parser.add_argument('--view', choices=['clusters', 'heatmap'], default='clusters')
     parser.add_argument('--device', choices=['cpu', 'cuda', 'mps'], default='mps')
     parser.add_argument('--typeofstreaming', choices=('video', 'live'), default='video')
-    parser.add_argument('--online', choices=('true', 'false'), default='true')
+    parser.add_argument('--online', choices=('true', 'false'), default='false')
     parser.add_argument('--skipframe', default=15, type=int)
 
     args = parser.parse_args()
@@ -127,7 +127,7 @@ if __name__ == '__main__':
             if key == 27:
                 break
             ret, frame = cap.read()
-            if not ret:
+            if not ret: # To see if the frame is correctly read
                 break
             frame_index += 1
             if frame_index % skip != 0:
@@ -146,7 +146,8 @@ if __name__ == '__main__':
                         continue
                     count += 1
 
-                    x1, y1, x2, y2 = map(int, box.xyxy.cpu().numpy()[0])
+                    x1, y1, x2, y2 = map(int, box.xyxy.cpu().numpy()[0]) #Bounding box in int(because are pixel coordinates)
+                    # Bottom center point
                     cx = int((x1 + x2) / 2)
                     cy = int(y2)
 
@@ -157,24 +158,24 @@ if __name__ == '__main__':
                                       max(cx - 10, 0):min(cx + 10, width)] += 1
                         last_seen_frame[max(cy - 10, 0):min(cy + 10, height),
                                         max(cx - 10, 0):min(cx + 10, width)] = frame_index
-
                         heatmap_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
                                       max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] += 1
                         last_seen_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
                                         max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] = frame_index
 
-                        #Decay process
+                        #Decay process that return TRUE after DECAY_DELAY frames of inactivity
                         inactive_mask_frame = (frame_index - last_seen_frame) > DECAY_DELAY
                         inactive_mask_floor = (frame_index - last_seen_floor) > DECAY_DELAY
 
                         heatmap_frame[inactive_mask_frame] *= DECAY_STEP
                         heatmap_floor[inactive_mask_floor] *= DECAY_STEP
 
+                        # This is not strictly necessary
                         heatmap_frame[heatmap_frame < MIN_VALUE] = MIN_VALUE
                         heatmap_floor[heatmap_floor < MIN_VALUE] = MIN_VALUE
 
                         # Visualization
-                        blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0)
+                        blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0) #Blur to have a smooth heatmap
                         heatmap_frame_img = cv2.applyColorMap(
                             cv2.normalize(blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
                             cv2.COLORMAP_JET
@@ -205,8 +206,7 @@ if __name__ == '__main__':
 
         #Statistics(It's possible that some time Max people it's not exact because the model can miss people or detect false positives)
         print("Max people in the room:", max(numbers_of_people) if numbers_of_people else 0)
-        print("Average people in the room:",
-              (sum(numbers_of_people) / len(numbers_of_people)) if numbers_of_people else 0)
+        print("Average people in the room:", (sum(numbers_of_people) / len(numbers_of_people)) if numbers_of_people else 0)
 
         if args.view == 'heatmap':
             out_frame.release()
@@ -256,11 +256,11 @@ if __name__ == '__main__':
         else:
             pts_arr = np.load(os.path.join(project_dir, "clusters_points.npy"))
             floor = np.load(os.path.join(project_dir, "floor.npy"))
-            norm_floor, min_xy, scale, canvas_size = normalize_floor(np.array(floor))
+            norm_floor, min_xy, scale, canvas_size = normalize_floor(floor)
             floor_map_static = np.ones((canvas_size[1], canvas_size[0], 3), dtype=np.uint8) * 255
             static_floor_base = cv2.polylines(floor_map_static, [norm_floor], isClosed=True, color=(0, 0, 0), thickness=2).copy()
 
-            WIN_MAIN = "Offline Clusters"
+            WIN_MAIN = "Offline Clusters" # To clear the window all time that i click on 'c'
             cv2.namedWindow(WIN_MAIN)
 
             def redraw_replay(frame_val, points_array, base_img):
@@ -278,6 +278,8 @@ if __name__ == '__main__':
             cv2.createTrackbar("Frame", WIN_MAIN, 0, max_frame, lambda v: redraw_replay(v, pts_arr, static_floor_base))
             cv2.createTrackbar("MinClusterSize", WIN_MAIN, 5, 100, lambda v: None)
 
+            print("Max people in the room:", read[0].strip() if read else "0")
+            print("Average people in the room:", read[1].strip() if read else "0")
             print("Offline cluster replay controls:")
             print(" - press 'c' to execute HDBSCAN over the current points untiled the selected frame.")
             print(" - press ESC to end the program.")
@@ -298,16 +300,16 @@ if __name__ == '__main__':
                     clustering = HDBSCAN(min_cluster_size=int(min_cluster_size)).fit(points)
                     labels = clustering.labels_
                     unique_labels = set(labels)
-                    num_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0)
+                    num_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0) # Exclude noise label (-1)
                     noise_count = int(list(labels).count(-1))
                     print(f"Cluster result: {num_clusters} cluster (noise: {noise_count} punti)")
 
                     result_img = static_floor_base.copy()
                     for (x, y), lbl in zip(points.astype(int), labels):
                         if lbl == -1:
-                            cv2.circle(result_img, (x, y), 4, (150, 150, 150), -1)
+                            cv2.circle(result_img, (x, y), 4, (150, 150, 150), -1) # Noise points in gray
                         else:
-                            cv2.circle(result_img, (x, y), 4, (0, 0, 255), -1)
+                            cv2.circle(result_img, (x, y), 4, (0, 0, 255), -1) # Clustered points in red
 
                     for lbl in unique_labels:
                         if lbl == -1:
@@ -322,8 +324,4 @@ if __name__ == '__main__':
                     cv2.imshow(WIN_MAIN, result_img)
 
             cv2.destroyWindow(WIN_MAIN)
-
-        print("Max people in the room:", read[0].strip() if read else "0")
-        print("Average people in the room:", read[1].strip() if read else "0")
-
         cv2.destroyAllWindows()
