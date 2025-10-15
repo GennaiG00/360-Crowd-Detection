@@ -5,6 +5,10 @@ Detected positions are mapped onto a predefined **floor plan** and visualized th
 
 It supports both **online (live detection)** and **offline (replay saved results)** modes.  
 
+In **clustering mode**, the system identifies the most crowded areas within the room. It utilizes the HDBSCAN algorithm to determine zones with a high concentration of people. By adjusting the parameters of the clustering method, it is possible to define the minimum number of individuals required to constitute a crowd, as well as the radius that encompasses the group.
+
+In **heatmap mode**, the intensity of the visualization is directly correlated with the duration of people's presence at a specific location. Consequently, the longer an individual remains stationary at a certain point, the higher the value in that area of the heatmap is incremented, reflecting greater permanence.
+
 ---
 
 ## Features
@@ -12,7 +16,7 @@ It supports both **online (live detection)** and **offline (replay saved results
 - Real-time or video-based **people detection** with YOLOv8  
 - Mapping of detections to a **floor plan**  
 - Visualizations:  
-  - **Heatmap** of crowd density (per frame and floor plan)  
+  - **Heatmap** of people 
   - **Clustering** (DBSCAN-based)  
 - Support for **video file input** or **RTMP live streaming**  
 - Save results to:  
@@ -24,6 +28,17 @@ It supports both **online (live detection)** and **offline (replay saved results
 
 ## Requirements
 
+First step is to clone the repository and navigate into it. After that, you can install the required dependencies.  
+create an environment and activate it:  
+
+```bash
+conda create -n env_name
+```
+Activate it with:  
+
+```bash
+conda activate env_name
+```
 Make sure the following dependencies are installed:  
 
 - Python 3.x  
@@ -44,14 +59,27 @@ pip install opencv-python numpy ultralytics scikit-learn
 
 ### Online Mode (Detection + Visualization)
 
-Process a **video file**:  
+Process a **video file** 
 
+Clustering example:  
+
+```bash
+python main.py --view clusters --device mps --typeofstreaming video --online true --skipframe 10 --eps 80 --minpts 2
+```
+Heatmap example:
 ```bash
 python main.py --view heatmap --device mps --typeofstreaming video --online true
 ```
 mps is for MacOS devices with Apple Silicon. Use `cuda` for NVIDIA GPUs or `cpu` if no GPU is available.
 
 Or use a **live RTMP stream**:  
+
+Clustering example:  
+
+```bash
+python main.py --view clusters --device mps --typeofstreaming live --online true --eps 80 --minpts 2
+```
+Heatmap example:
 
 ```bash
 python main.py --view heatmap --device cuda --typeofstreaming live --online true
@@ -69,21 +97,18 @@ python main.py --online false
 
 ## Command-Line Options
 
-| Argument            | Choices               | Default   | Description                                            |
-|---------------------|-----------------------|-----------|--------------------------------------------------------|
-| `--view`            | `heatmap`, `clusters` | `heatmap` | Visualization type                                     |
-| `--device`          | `cpu`, `cuda`, `mps`  | `mps`     | Device for run YOLO model                              |
-| `--typeofstreaming` | `video`, `live`       | `video`   | Input source                                           |
-| `--online`          | `true`, `false`       | `false`   | Online mode or offline                                 |
-| `--fileName`        | `<str>`               | `xxx`     | Output filename prefix (used only if `--online false`) |
-| `--skipframe`       | `<int>`               | `15`      | Number of frame to skip             |
+| Argument            | Choices               | Default    | Description                                            |
+|---------------------|-----------------------|------------|--------------------------------------------------------|
+| `--view`            | `heatmap`, `clusters` | `clusters` | Visualization type                                     |
+| `--device`          | `cpu`, `cuda`, `mps`  | `mps`      | Device for run YOLO model                              |
+| `--typeofstreaming` | `video`, `live`       | `video`    | Input source                                           |
+| `--online`          | `true`, `false`       | `false`    | Online mode or offline                                 |
+| `--fileName`        | `<str>`               | `xxx`      | Output filename prefix (used only if `--online false`) |
+| `--skipframe`       | `<int>`               | `15`       | Number of frame to skip                                |
+| `--eps`             | `<int>`               | `100`      | esp of DBSCAN                                          |
+| `--minpts`          | `<int>`               | `2`        | minpts of DBSCAN                                       |
 
 ---
-
-
-
-https://github.com/user-attachments/assets/b0950ab6-eb43-4bc1-8af7-d2c45ea6886e
-
 
 
 ## Output
@@ -100,6 +125,8 @@ When running in **offline mode**:
 ---
 
 ## Tips
-- Adjust `--skipframe` to balance performance and detection frequency. Expecially it's useful in clustering view because it's more importat see 
-    the point where people are in a static position than moving around.
+- Adjust `--skipframe` to balance performance and detection frequency.
 - Ensure that when you use offline mode (`--online false`), the specified `--fileName` matches the prefix of the saved files you want to replay.
+- Tuning DBSCAN: The quality of clustering depends heavily on --eps and --minsamples parameters:
+  - eps: Controls the "reach" of each point. A smaller value creates more, smaller clusters. A larger value groups more distant points together.
+  - minsamples: Defines what constitutes a "dense" area. A higher value will classify smaller groups as "Alone" points rather than distinct clusters.
