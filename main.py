@@ -259,11 +259,10 @@ if __name__ == '__main__':
                                         if color not in active_colors_in_legend:
                                             dynamic_legend_info[label] = color
                                             active_colors_in_legend.add(color)
-                            else:  # Se tutti i cluster hanno la stessa dimensione
+                            else:
                                 label = f"Cluster ({min_size})"
                                 dynamic_legend_info[label] = COLOR_PALETTE[0]
 
-                            # Disegna i cluster usando i colori proporzionali
                             for lbl, size in cluster_sizes.items():
                                 cluster_points = points[labels == lbl]
 
@@ -281,7 +280,7 @@ if __name__ == '__main__':
                                 for point in cluster_points:
                                     cv2.circle(final_frame, tuple(point.astype(int)), 8, (0, 0, 0), 1)
 
-                    # Applica trasparenza aree cluster
+                    # Apply transparency to cluster areas
                     alpha = 0.5
                     mask = np.any(overlay_areas > 0, axis=-1)
                     final_frame[mask] = (final_frame[mask].astype(float) * (1 - alpha) + overlay_areas[mask].astype(float) * alpha).astype(np.uint8)
@@ -293,9 +292,9 @@ if __name__ == '__main__':
                     y_pos, row_height, square_size = 40, 40, 20
 
                     for label, color in dynamic_legend_info.items():
-                        b, g, r = color  # Matplotlib è RGB, OpenCV è BGR
+                        b, g, r = color  # Matplotlib is RGB, OpenCV is BGR
                         cv2.rectangle(legend, (20, y_pos - square_size + 5), (20 + square_size, y_pos + 5), (b, g, r),
-                                      -1)
+                                       -1)
                         cv2.putText(legend, label, (20 + square_size + 10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                                     (0, 0, 0), 1)
                         y_pos += row_height
