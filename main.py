@@ -39,9 +39,7 @@ def on_trackbar(val, cap, window_name):
 
 
 def get_dynamic_color(size, max_people):
-    # Mappa 1 → blu/verde freddo, max_people → rosso caldo
     ratio = min(size / max_people, 1.0)
-    # Interpolazione tra blu (freddo) e rosso (caldo)
     r = int(255 * ratio)
     g = int(255 * (1 - ratio))
     b = 0
