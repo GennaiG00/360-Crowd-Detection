@@ -165,143 +165,146 @@ if __name__ == '__main__':
                     cy = int(y2)
                     mapped_pos = map_person_to_floor(cx, cy, min_xy, scale)
 
-                if args.view == 'heatmap':
-                    heatmap_frame[max(cy - 10, 0):min(cy + 10, height),
-                    max(cx - 10, 0):min(cx + 10, width)] += 1
-                    last_seen_frame[max(cy - 10, 0):min(cy + 10, height),
-                    max(cx - 10, 0):min(cx + 10, width)] = frame_index
-                    heatmap_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
-                    max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] += 1
-                    last_seen_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
-                    max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] = frame_index
-                    inactive_mask_frame = (frame_index - last_seen_frame) > DECAY_DELAY
-                    inactive_mask_floor = (frame_index - last_seen_floor) > DECAY_DELAY
-                    heatmap_frame[inactive_mask_frame] *= DECAY_STEP
-                    heatmap_floor[inactive_mask_floor] *= DECAY_STEP
-                    heatmap_frame[heatmap_frame < MIN_VALUE] = MIN_VALUE
-                    heatmap_floor[heatmap_floor < MIN_VALUE] = MIN_VALUE
-                    blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0)
-                    heatmap_frame_img = cv2.applyColorMap(
-                        cv2.normalize(blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
-                        cv2.COLORMAP_JET
-                    )
-                    overlay_frame = cv2.addWeighted(frame, 0.6, heatmap_frame_img, 0.5, 0)
-                    cv2.imshow("Realtime Heatmap - Frame", overlay_frame)
-                    out_frame.write(overlay_frame)
-                    blurred_floor = cv2.GaussianBlur(heatmap_floor, (75, 75), 0)
-                    heatmap_floor_img = cv2.applyColorMap(
-                        cv2.normalize(blurred_floor, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
-                        cv2.COLORMAP_JET
-                    )
-                    overlay_floor = cv2.addWeighted(static_floor, 0.6, heatmap_floor_img, 0.5, 0)
-                    cv2.imshow("Realtime Heatmap - Floor", overlay_floor)
-                    out_floor.write(overlay_floor)
-                else:
-                    final_frame = static_floor.copy()
+            # Save the number of detected people for this processed frame
+            numbers_of_people.append(count)
 
-                    detections = []
-                    if results.boxes:
-                        for box in results.boxes:
-                            if box.conf < 0.40 or model.names[int(box.cls)] != "person":
-                                continue
-                            x1, y1, x2, y2 = map(int, box.xyxy.cpu().numpy()[0])
-                            cx, cy = int((x1 + x2) / 2), int(y2)
-                            mapped_pos = map_person_to_floor(cx, cy, min_xy, scale)
-                            detections.append(mapped_pos)
+            if args.view == 'heatmap':
+                heatmap_frame[max(cy - 10, 0):min(cy + 10, height),
+                max(cx - 10, 0):min(cx + 10, width)] += 1
+                last_seen_frame[max(cy - 10, 0):min(cy + 10, height),
+                max(cx - 10, 0):min(cx + 10, width)] = frame_index
+                heatmap_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
+                max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] += 1
+                last_seen_floor[max(mapped_pos[1] - 10, 0):min(mapped_pos[1] + 10, canvas_size[1]),
+                max(mapped_pos[0] - 10, 0):min(mapped_pos[0] + 10, canvas_size[0])] = frame_index
+                inactive_mask_frame = (frame_index - last_seen_frame) > DECAY_DELAY
+                inactive_mask_floor = (frame_index - last_seen_floor) > DECAY_DELAY
+                heatmap_frame[inactive_mask_frame] *= DECAY_STEP
+                heatmap_floor[inactive_mask_floor] *= DECAY_STEP
+                heatmap_frame[heatmap_frame < MIN_VALUE] = MIN_VALUE
+                heatmap_floor[heatmap_floor < MIN_VALUE] = MIN_VALUE
+                blurred_frame = cv2.GaussianBlur(heatmap_frame, (75, 75), 0)
+                heatmap_frame_img = cv2.applyColorMap(
+                    cv2.normalize(blurred_frame, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
+                    cv2.COLORMAP_JET
+                )
+                overlay_frame = cv2.addWeighted(frame, 0.6, heatmap_frame_img, 0.5, 0)
+                cv2.imshow("Realtime Heatmap - Frame", overlay_frame)
+                out_frame.write(overlay_frame)
+                blurred_floor = cv2.GaussianBlur(heatmap_floor, (75, 75), 0)
+                heatmap_floor_img = cv2.applyColorMap(
+                    cv2.normalize(blurred_floor, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8),
+                    cv2.COLORMAP_JET
+                )
+                overlay_floor = cv2.addWeighted(static_floor, 0.6, heatmap_floor_img, 0.5, 0)
+                cv2.imshow("Realtime Heatmap - Floor", overlay_floor)
+                out_floor.write(overlay_floor)
+            else:
+                final_frame = static_floor.copy()
 
-                    overlay_areas = np.zeros_like(final_frame, dtype=np.uint8)
-                    dynamic_legend_info = {}
+                detections = []
+                if results.boxes:
+                    for box in results.boxes:
+                        if box.conf < 0.40 or model.names[int(box.cls)] != "person":
+                            continue
+                        x1, y1, x2, y2 = map(int, box.xyxy.cpu().numpy()[0])
+                        cx, cy = int((x1 + x2) / 2), int(y2)
+                        mapped_pos = map_person_to_floor(cx, cy, min_xy, scale)
+                        detections.append(mapped_pos)
 
-                    if len(detections) > 0:
-                        points = np.array(detections)
-                        clustering = DBSCAN(eps=args.eps, min_samples=args.minsamples).fit(points)
-                        labels = clustering.labels_
+                overlay_areas = np.zeros_like(final_frame, dtype=np.uint8)
+                dynamic_legend_info = {}
 
-                        unique_labels, counts = np.unique(labels, return_counts=True)
-                        cluster_sizes = {lbl: count for lbl, count in zip(unique_labels, counts) if lbl != -1}
+                if len(detections) > 0:
+                    points = np.array(detections)
+                    clustering = DBSCAN(eps=args.eps, min_samples=args.minsamples).fit(points)
+                    labels = clustering.labels_
 
-                        if -1 in unique_labels:
-                            dynamic_legend_info["Alone (1)"] = (0, 128, 0) # This is the color for isolated points
-                            isolated_points = points[labels == -1]
-                            for point in isolated_points: # Draw isolated points
-                                cv2.circle(final_frame, tuple(point.astype(int)), 15, (0, 128, 0), 1)
-                                cv2.circle(final_frame, tuple(point.astype(int)), 8, (0, 0, 0), -1)
+                    unique_labels, counts = np.unique(labels, return_counts=True)
+                    cluster_sizes = {lbl: count for lbl, count in zip(unique_labels, counts) if lbl != -1}
 
-                        if len(cluster_sizes) > 0:
-                            sizes_list = list(cluster_sizes.values())
-                            min_size = min(sizes_list)
-                            max_size = max(sizes_list)
+                    if -1 in unique_labels:
+                        dynamic_legend_info["Alone (1)"] = (0, 128, 0) # This is the color for isolated points
+                        isolated_points = points[labels == -1]
+                        for point in isolated_points: # Draw isolated points
+                            cv2.circle(final_frame, tuple(point.astype(int)), 15, (0, 128, 0), 1)
+                            cv2.circle(final_frame, tuple(point.astype(int)), 8, (0, 0, 0), -1)
 
-                            if min_size == max_size:
-                                span = 0
+                    if len(cluster_sizes) > 0:
+                        sizes_list = list(cluster_sizes.values())
+                        min_size = min(sizes_list)
+                        max_size = max(sizes_list)
+
+                        if min_size == max_size:
+                            span = 0
+                        else:
+                            span = max_size - min_size
+
+                        if span > 0:
+                            bin_width = span / (MAX_COLORS - 1) if MAX_COLORS > 1 else 1
+                            bin_width = max(1, bin_width)
+
+                            active_colors_in_legend = set()
+                            for i in range(MAX_COLORS):
+                                lower_bound = int(min_size + i * bin_width)
+                                upper_bound = int(min_size + (i + 1) * bin_width)
+
+                                is_range_active = any(lower_bound <= s < upper_bound for s in sizes_list) or \
+                                                  (i == MAX_COLORS - 1 and any(
+                                                      s >= lower_bound for s in sizes_list))
+
+                                if is_range_active:
+                                    color = COLOR_PALETTE[i]
+                                    if upper_bound > lower_bound:
+                                        label = f"Cluster ({lower_bound}-{upper_bound - 1})"
+                                    else:
+                                        label = f"Cluster ({lower_bound})"
+                                    if color not in active_colors_in_legend:
+                                        dynamic_legend_info[label] = color
+                                        active_colors_in_legend.add(color)
+                        else:
+                            label = f"Cluster ({min_size})"
+                            dynamic_legend_info[label] = COLOR_PALETTE[0]
+
+                        for lbl, size in cluster_sizes.items():
+                            cluster_points = points[labels == lbl]
+
+                            if span == 0:
+                                color_index = 0
                             else:
-                                span = max_size - min_size
+                                color_index = int(((size - min_size) / span) * (MAX_COLORS - 1))
 
-                            if span > 0:
-                                bin_width = span / (MAX_COLORS - 1) if MAX_COLORS > 1 else 1
-                                bin_width = max(1, bin_width)
+                            color_index = max(0, min(MAX_COLORS - 1, color_index))
+                            color = COLOR_PALETTE[color_index]
 
-                                active_colors_in_legend = set()
-                                for i in range(MAX_COLORS):
-                                    lower_bound = int(min_size + i * bin_width)
-                                    upper_bound = int(min_size + (i + 1) * bin_width)
+                            centroid = cluster_points.mean(axis=0).astype(int)
+                            radius = int(np.max(np.linalg.norm(cluster_points - centroid, axis=1))) + 20
+                            cv2.circle(overlay_areas, tuple(centroid), radius, color, -1)
+                            for point in cluster_points:
+                                cv2.circle(final_frame, tuple(point.astype(int)), 8, (0, 0, 0), 1)
 
-                                    is_range_active = any(lower_bound <= s < upper_bound for s in sizes_list) or \
-                                                      (i == MAX_COLORS - 1 and any(
-                                                          s >= lower_bound for s in sizes_list))
+                # Apply transparency to cluster areas
+                alpha = 0.5
+                mask = np.any(overlay_areas > 0, axis=-1)
+                final_frame[mask] = (final_frame[mask].astype(float) * (1 - alpha) + overlay_areas[mask].astype(float) * alpha).astype(np.uint8)
 
-                                    if is_range_active:
-                                        color = COLOR_PALETTE[i]
-                                        if upper_bound > lower_bound:
-                                            label = f"Cluster ({lower_bound}-{upper_bound - 1})"
-                                        else:
-                                            label = f"Cluster ({lower_bound})"
-                                        if color not in active_colors_in_legend:
-                                            dynamic_legend_info[label] = color
-                                            active_colors_in_legend.add(color)
-                            else:
-                                label = f"Cluster ({min_size})"
-                                dynamic_legend_info[label] = COLOR_PALETTE[0]
+                # This part creates the dynamic legend(it's not strictly necessary but useful. It can be changed if needed)
+                frame_height = final_frame.shape[0]
+                legend_width = 250
+                legend = np.ones((frame_height, legend_width, 3), dtype="uint8") * 255
+                y_pos, row_height, square_size = 40, 40, 20
 
-                            for lbl, size in cluster_sizes.items():
-                                cluster_points = points[labels == lbl]
+                for label, color in dynamic_legend_info.items():
+                    b, g, r = color  # Matplotlib is RGB, OpenCV is BGR
+                    cv2.rectangle(legend, (20, y_pos - square_size + 5), (20 + square_size, y_pos + 5), (b, g, r),
+                                   -1)
+                    cv2.putText(legend, label, (20 + square_size + 10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                                (0, 0, 0), 1)
+                    y_pos += row_height
 
-                                if span == 0:
-                                    color_index = 0
-                                else:
-                                    color_index = int(((size - min_size) / span) * (MAX_COLORS - 1))
-
-                                color_index = max(0, min(MAX_COLORS - 1, color_index))
-                                color = COLOR_PALETTE[color_index]
-
-                                centroid = cluster_points.mean(axis=0).astype(int)
-                                radius = int(np.max(np.linalg.norm(cluster_points - centroid, axis=1))) + 20
-                                cv2.circle(overlay_areas, tuple(centroid), radius, color, -1)
-                                for point in cluster_points:
-                                    cv2.circle(final_frame, tuple(point.astype(int)), 8, (0, 0, 0), 1)
-
-                    # Apply transparency to cluster areas
-                    alpha = 0.5
-                    mask = np.any(overlay_areas > 0, axis=-1)
-                    final_frame[mask] = (final_frame[mask].astype(float) * (1 - alpha) + overlay_areas[mask].astype(float) * alpha).astype(np.uint8)
-
-                    # This part creates the dynamic legend(it's not strictly necessary but useful. It can be changed if needed)
-                    frame_height = final_frame.shape[0]
-                    legend_width = 250
-                    legend = np.ones((frame_height, legend_width, 3), dtype="uint8") * 255
-                    y_pos, row_height, square_size = 40, 40, 20
-
-                    for label, color in dynamic_legend_info.items():
-                        b, g, r = color  # Matplotlib is RGB, OpenCV is BGR
-                        cv2.rectangle(legend, (20, y_pos - square_size + 5), (20 + square_size, y_pos + 5), (b, g, r),
-                                       -1)
-                        cv2.putText(legend, label, (20 + square_size + 10, y_pos), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                                    (0, 0, 0), 1)
-                        y_pos += row_height
-
-                    output_with_legend = np.hstack([final_frame, legend])
-                    cv2.imshow("Realtime Clusters - Floor", output_with_legend)
-                    out_clusters.write(output_with_legend)
+                output_with_legend = np.hstack([final_frame, legend])
+                cv2.imshow("Realtime Clusters - Floor", output_with_legend)
+                out_clusters.write(output_with_legend)
 
         if args.view == 'clusters':
             if 'out_clusters' in locals():
@@ -309,6 +312,22 @@ if __name__ == '__main__':
         if args.view == 'heatmap':
             if 'out_floor' in locals():
                 out_floor.release()
+
+        # Write people_count.txt with max and average people observed during the online run
+        try:
+            if len(numbers_of_people) > 0:
+                max_people = int(max(numbers_of_people))
+                avg_people = float(sum(numbers_of_people) / len(numbers_of_people))
+            else:
+                max_people = 0
+                avg_people = 0.0
+            people_count_path = os.path.join(project_dir, "people_count.txt")
+            with open(people_count_path, "w") as f:
+                f.write(f"{max_people}\n")
+                f.write(f"{avg_people:.2f}\n")
+        except Exception as e:
+            print(f"Warning: could not write people_count.txt: {e}")
+
         cap.release()
         cv2.destroyAllWindows()
 
