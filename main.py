@@ -302,11 +302,11 @@ if __name__ == '__main__':
 
                 output_with_legend = np.hstack([final_frame, legend])
                 cv2.imshow("Realtime Clusters - Floor", output_with_legend)
-                out_clusters.write(output_with_legend)
+                # out_clusters.write(output_with_legend)
 
-        if args.view == 'clusters':
-            if 'out_clusters' in locals():
-                out_clusters.release()
+        #if args.view == 'clusters':
+            #if 'out_clusters' in locals():
+                # out_clusters.release()
         if args.view == 'heatmap':
             if 'out_floor' in locals():
                 out_floor.release()
