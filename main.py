@@ -141,10 +141,9 @@ if __name__ == '__main__':
             ret, frame = cap.read()
             if not ret:
                 break
-            if args.typeofstreaming == 'video':
-                frame_index += 1
-                if frame_index % args.skipframe != 0:
-                    continue
+            frame_index += 1
+            if frame_index % args.skipframe != 0:
+                continue
 
             results = model(frame, verbose=False)[0]
             count = 0
@@ -302,11 +301,11 @@ if __name__ == '__main__':
 
                 output_with_legend = np.hstack([final_frame, legend])
                 cv2.imshow("Realtime Clusters - Floor", output_with_legend)
-                # out_clusters.write(output_with_legend)
+                out_clusters.write(output_with_legend)
 
-        #if args.view == 'clusters':
-            #if 'out_clusters' in locals():
-                # out_clusters.release()
+        if args.view == 'clusters':
+            if 'out_clusters' in locals():
+                out_clusters.release()
         if args.view == 'heatmap':
             if 'out_floor' in locals():
                 out_floor.release()
