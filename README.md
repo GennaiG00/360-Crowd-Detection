@@ -64,7 +64,7 @@ Process a **video file**
 Clustering example:  
 
 ```bash
-python main.py --view clusters --device mps --typeofstreaming video --online true --skipframe 10 --eps 80 --minpts 2
+python main.py --view clusters --device mps --typeofstreaming video --online true --skipframe 10 --eps 80 --minsamples 2
 ```
 Heatmap example:
 ```bash
@@ -77,7 +77,7 @@ Or use a **live RTMP stream**:
 Clustering example:  
 
 ```bash
-python main.py --view clusters --device mps --typeofstreaming live --online true --eps 80 --minpts 2
+python main.py --view clusters --device mps --typeofstreaming live --online true --eps 80 --minsamples 2
 ```
 Heatmap example:
 
