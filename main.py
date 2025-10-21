@@ -72,9 +72,6 @@ if __name__ == '__main__':
             video_file = input("Enter the video file name (with extension): ")
             cap = cv2.VideoCapture(os.path.join(VIDEO_PATH, video_file))
 
-        if not cap.isOpened():
-            print('!!! Unable to open video source')
-            sys.exit(-1)
 
         fps = cap.get(cv2.CAP_PROP_FPS)
         ret, first_frame = cap.read()
@@ -144,9 +141,10 @@ if __name__ == '__main__':
             ret, frame = cap.read()
             if not ret:
                 break
-            frame_index += 1
-            if frame_index % args.skipframe != 0:
-                continue
+            if args.typeofstreaming == 'video':
+                frame_index += 1
+                if frame_index % args.skipframe != 0:
+                    continue
 
             results = model(frame, verbose=False)[0]
             count = 0
